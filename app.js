@@ -54,26 +54,46 @@ async function fetchCredentialsFromSheet() {
             return false;
         }
 
+        // Check if the response is JSON (like an API error)
+        if (csvText.trim().startsWith('{') || csvText.trim().startsWith('[')) {
+            updateConnectionStatus('ได้รับ JSON', false, 'error');
+            document.getElementById('authStatusText').textContent = 'พบข้อมูล JSON (อาจจะเป็น Error จาก Server): ' + csvText.substring(0, 100);
+            showToast('พบไฟล์ JSON แทนที่จะเป็น CSV', 'error');
+            return false;
+        }
+
         // Parse CSV
         const rows = parseCSV(csvText);
         
-        // Find the first row that actually contains some data (skipping headers and completely empty rows)
+        // Find the first row that actually contains some data
         let dataRow = null;
-        for (let i = 1; i < rows.length; i++) {
+        for (let i = 0; i < rows.length; i++) {
             const row = rows[i];
-            // Clean up any stray \r characters from each cell
             const cleanRow = row.map(cell => cell.replace(/\r/g, '').trim());
+            
             // If the row has at least 3 columns and they are not all empty
             if (cleanRow.length >= 3 && (cleanRow[0] || cleanRow[1] || cleanRow[2])) {
+                const combined = cleanRow.join('').toLowerCase();
+                // Skip the row if it looks exactly like the header row
+                if (combined.includes('subscription') || combined.includes('clientid') || combined.includes('clientsecret') || combined.includes('client_id')) {
+                    continue;
+                }
                 dataRow = cleanRow;
-                break; // Found the first valid data row
+                break;
             }
         }
 
         if (!dataRow) {
-            updateConnectionStatus('ไม่พบข้อมูลใน Google Sheet', false, 'error');
-            document.getElementById('authStatusText').textContent = 'ไม่พบข้อมูล Credentials หรือแถวข้อมูลว่างเปล่า';
+            updateConnectionStatus('ไม่พบข้อมูล', false, 'error');
+            const preview = csvText.length > 50 ? csvText.substring(0, 50) + '...' : csvText;
+            document.getElementById('authStatusText').textContent = `ดึงข้อมูลมาได้แต่ไม่ตรงรูปแบบ CSV (ข้อมูลที่ได้: ${preview})`;
             showToast('ไม่พบแถวข้อมูล Credentials ที่ถูกต้อง', 'error');
+            console.error("Raw CSV Response:", csvText);
+            
+            // Show it in the response panel so user can see what's actually returned
+            if (typeof showResponse === 'function') {
+                showResponse('ข้อมูลที่ได้รับจาก /proxy/sheet', { rawText: csvText }, true);
+            }
             return false;
         }
 
