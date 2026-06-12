@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    {
+      "source": "/proxy/sheet",
+      "destination": "https://docs.google.com/spreadsheets/d/1YLuRwlFbJeSItsdDL9hv1NcxxpqGkEvCrpshl465PEU/gviz/tq?tqx=out:csv"
+    },
+    {
+      "source": "/proxy/api/:match*",
+      "destination": "https://api.gofive.co.th/:match*"
+    }
+  ]
+}
