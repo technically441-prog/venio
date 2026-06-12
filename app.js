@@ -407,10 +407,16 @@ async function handleCreateCase(e) {
         dateCase,
         dateDue,
         activityNos: [...activityNos],
-        dealNos: [...dealNos],
-        note,
-        assignedToUserId
+        dealNos: [...dealNos]
     };
+
+    if (note) {
+        payload.note = note;
+    }
+
+    if (assignedToUserId) {
+        payload.assignedToUserId = assignedToUserId;
+    }
 
     const btn = document.getElementById('caseBtn');
     btn.classList.add('loading');
