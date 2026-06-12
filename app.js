@@ -45,27 +45,48 @@ async function fetchCredentialsFromSheet() {
         const response = await fetch(GOOGLE_SHEET_CSV_URL);
         const csvText = await response.text();
 
-        // Parse CSV
-        const rows = parseCSV(csvText);
-        if (rows.length < 2) {
-            updateConnectionStatus('ไม่พบข้อมูลใน Google Sheet', false, 'error');
-            document.getElementById('authStatusText').textContent = 'ไม่พบข้อมูล Credentials ใน Google Sheet';
-            showToast('ไม่พบข้อมูล Credentials ใน Google Sheet', 'error');
+        // Check if the response is an HTML page (e.g., 404 Not Found, or Google Login page due to permissions)
+        if (csvText.trim().toLowerCase().startsWith('<!doctype') || csvText.trim().toLowerCase().startsWith('<html')) {
+            updateConnectionStatus('ไม่พบ CSV', false, 'error');
+            document.getElementById('authStatusText').textContent = 'พบหน้า HTML แทนที่จะเป็นไฟล์ CSV (อาจจะลืมตั้งค่า Proxy หรือ Sheet ติดสิทธิ์การเข้าถึง)';
+            showToast('พบไฟล์ HTML: โปรดตรวจสอบการตั้งค่า /proxy/sheet บน Server จริง', 'error');
+            console.error("Received HTML instead of CSV:", csvText.substring(0, 500));
             return false;
         }
 
-        // Row 0 = headers, Row 1 = data
-        const data = rows[1];
+        // Parse CSV
+        const rows = parseCSV(csvText);
+        
+        // Find the first row that actually contains some data (skipping headers and completely empty rows)
+        let dataRow = null;
+        for (let i = 1; i < rows.length; i++) {
+            const row = rows[i];
+            // Clean up any stray \r characters from each cell
+            const cleanRow = row.map(cell => cell.replace(/\r/g, '').trim());
+            // If the row has at least 3 columns and they are not all empty
+            if (cleanRow.length >= 3 && (cleanRow[0] || cleanRow[1] || cleanRow[2])) {
+                dataRow = cleanRow;
+                break; // Found the first valid data row
+            }
+        }
+
+        if (!dataRow) {
+            updateConnectionStatus('ไม่พบข้อมูลใน Google Sheet', false, 'error');
+            document.getElementById('authStatusText').textContent = 'ไม่พบข้อมูล Credentials หรือแถวข้อมูลว่างเปล่า';
+            showToast('ไม่พบแถวข้อมูล Credentials ที่ถูกต้อง', 'error');
+            return false;
+        }
+
         credentials = {
-            subscriptionKey: data[0] || '',
-            clientId: data[1] || '',
-            clientSecret: data[2] || ''
+            subscriptionKey: dataRow[0] || '',
+            clientId: dataRow[1] || '',
+            clientSecret: dataRow[2] || ''
         };
 
         if (!credentials.subscriptionKey || !credentials.clientId || !credentials.clientSecret) {
             updateConnectionStatus('Credentials ไม่ครบ', false, 'error');
-            document.getElementById('authStatusText').textContent = 'ข้อมูล Credentials ใน Google Sheet ไม่ครบถ้วน';
-            showToast('ข้อมูล Credentials ใน Google Sheet ไม่ครบถ้วน', 'error');
+            document.getElementById('authStatusText').textContent = `ข้อมูลไม่ครบ: (Key=${credentials.subscriptionKey ? 'มี' : 'ไม่มี'}, ID=${credentials.clientId ? 'มี' : 'ไม่มี'}, Secret=${credentials.clientSecret ? 'มี' : 'ไม่มี'})`;
+            showToast('ข้อมูล Credentials ขาดหายไปบางส่วน', 'error');
             return false;
         }
 
@@ -459,7 +480,7 @@ function toISOWithTimezone(datetimeLocal) {
     const pad = n => String(Math.abs(n)).padStart(2, '0');
     const hours = pad(Math.floor(offset / 60));
     const minutes = pad(offset % 60);
-    return date.toISOString().replace('Z', '') + `${sign}${hours}${minutes}`;
+    return date.toISOString().replace('Z', '') + `${sign}${hours}:${minutes}`;
 }
 
 function showResponse(title, data, isError) {
